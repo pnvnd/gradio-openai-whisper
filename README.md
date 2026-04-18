@@ -28,12 +28,17 @@ https://github.com/openai/whisper/blob/main/whisper/__init__.py#L21
 ```
 
 ## Docker Instructions
-Build this docker image with:
+Run this, if limits exceeded, try again later. This image is ~1GB to pull.
+```
+docker run --name openai-whisper -dp 7860:7860 ghcr.io/pnvnd/gradio-openai-whisper:latest
+```
+
+Otherwise, build this docker image locally with:
 ```
 docker build -t transcription:latest .
 ```
 
-To run the container, use:
+To run the container locally, use:
 ```
 docker run --name openai-whisper -dp 7860:7860 transcription:latest
 ```
