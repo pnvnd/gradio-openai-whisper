@@ -1,5 +1,6 @@
 # gradio-openai-whisper
 User-friendly application to transcribe audio.
+![Screenshot](screenshot.png)
 
 ## Instructions
 Before you run this locally, make sure these are installed:
