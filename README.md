@@ -39,3 +39,9 @@ docker run --name openai-whisper -dp 7860:7860 transcription:latest
 ```
 
 Once the container is running, go to http://localhost:7860 to use the app.
+
+## Tips
+If you want to transcribe audio from a video, use `ffmpeg` to convert the video to audio file first:
+```
+ffmpeg -i video.mp4 -vn -map_metadata -1 -ac 1 -c:a libopus -b:a 12k -application voip audio.ogg
+```
