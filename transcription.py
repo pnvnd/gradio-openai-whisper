@@ -49,7 +49,6 @@ AVAILABLE_MODELS = [
 loaded_model = None
 current_model_name = None
 
-
 def load_model(model_name: str):
     """Load model from local cache or download from internet."""
     global loaded_model, current_model_name
@@ -72,13 +71,13 @@ def load_model(model_name: str):
     current_model_name = model_name
     return model
 
-
-def format_time(seconds):
-    """Format seconds into MM:SS.ss format."""
-    minutes = int(seconds // 60)
-    secs = seconds % 60
-    return f"{minutes:02d}:{secs:05.2f}"
-
+def format_srt_timestamp(seconds):
+    """Format seconds into SRT timestamp HH:MM:SS,mmm."""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds - int(seconds)) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
 def is_recorded_audio(audio_path: str) -> bool:
     """Return True only for microphone-recorded audio files."""
@@ -86,7 +85,6 @@ def is_recorded_audio(audio_path: str) -> bool:
         return False
     basename = os.path.basename(audio_path)
     return basename.startswith("tmp") or basename.startswith("audio")
-
 
 def prepare_audio_download(audio_path: str):
     """Expose the recorded audio path for download only for recordings."""
@@ -104,8 +102,7 @@ def prepare_audio_download(audio_path: str):
     except Exception:
         return gr.update(visible=False, value=None)
 
-
-def transcribe(audio_path: str, language: str, model_name: str) -> tuple:
+def transcribe(audio_path: str, language: str, model_name: str, translate: bool) -> tuple:
     """Transcribe audio file using OpenAI Whisper model."""
     input_path = audio_path
     
@@ -117,36 +114,42 @@ def transcribe(audio_path: str, language: str, model_name: str) -> tuple:
     
     # Map user-friendly language name to code, or use custom input as-is
     lang_code = LANGUAGE_CODES.get(language, language)
-    result = model.transcribe(input_path, language=lang_code, verbose=True)
     
-    # Build transcription text with timestamps
+    # Determine if translation is needed
+    is_english = lang_code == "en"
+    task = "translate" if translate and not is_english else "transcribe"
+    
+    result = model.transcribe(input_path, language=lang_code, task=task, verbose=True)
+    
+    # Build SRT transcription text with timestamps
     segments = result.get("segments", [])
     transcription = ""
-    for segment in segments:
-        start = segment["start"]
-        end = segment["end"]
-        text = segment["text"]
-        start_str = format_time(start)
-        end_str = format_time(end)
-        transcription += f"[{start_str} --> {end_str}] {text}\n"
-    
-    # If no segments, fall back to full text
-    if not segments:
-        transcription = result["text"]
+    if segments:
+        for idx, segment in enumerate(segments, start=1):
+            start = segment["start"]
+            end = segment["end"]
+            text = segment["text"].strip()
+            start_str = format_srt_timestamp(start)
+            end_str = format_srt_timestamp(end)
+            transcription += f"{idx}\n{start_str} --> {end_str}\n{text}\n\n"
+    else:
+        text = result.get("text", "").strip()
+        transcription = f"1\n00:00:00,000 --> 00:00:01,000\n{text}\n"
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     input_filename = os.path.splitext(os.path.basename(input_path))[0]
-    transcription_filename = f"{timestamp}_{input_filename}_{model_name}.txt"
+    transcription_filename = f"[{model_name}]_{timestamp}_{input_filename}.srt"
     dest_dir = os.environ.get("TMP") or os.environ.get("TEMP") or os.getcwd()
     transcription_path = os.path.join(dest_dir, transcription_filename)
     with open(transcription_path, 'w', encoding='utf-8') as f:
         f.write(transcription)
 
-    # Show transcription download output after successful transcription
     return transcription, gr.update(visible=True, value=transcription_path)
 
-
-
+def toggle_translate_visibility(language: str):
+    """Show translate checkbox only for non-English languages."""
+    lang_code = LANGUAGE_CODES.get(language, language)
+    return gr.update(visible=lang_code != "en")
 
 with gr.Blocks() as iface:
     gr.Markdown("# OpenAI Whisper - Speech Recognition")
@@ -167,6 +170,7 @@ with gr.Blocks() as iface:
                 value="base",
                 label="Select Model"
             )
+            translate_checkbox = gr.Checkbox(label="Translate to English", value=False, visible=False)
             transcribe_btn = gr.Button("Transcribe", scale=1)
     
     transcription_output = gr.Textbox(label="Transcription", lines=10)
@@ -174,9 +178,15 @@ with gr.Blocks() as iface:
     download_audio_output = gr.File(label="Download Recorded Audio", visible=False, type="filepath")
     transcription_download_output = gr.File(label="Download Transcription", visible=False, type="filepath")
     
+    language_dropdown.change(
+        toggle_translate_visibility,
+        inputs=[language_dropdown],
+        outputs=[translate_checkbox]
+    )
+    
     transcribe_btn.click(
         transcribe,
-        inputs=[audio_input, language_dropdown, model_dropdown],
+        inputs=[audio_input, language_dropdown, model_dropdown, translate_checkbox],
         outputs=[transcription_output, transcription_download_output]
     )
     

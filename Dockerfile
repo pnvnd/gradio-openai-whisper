@@ -1,6 +1,5 @@
-# Build this docker image with:
-# docker build -t transcription:latest .
-# Use a Debian-based slim image
+# To build:
+# docker buildx build --platform linux/amd64,linux/arm64/v8 --push -t ghcr.io/pnvnd/gradio-openai-whisper:latest .
 FROM python:3.13-slim-bookworm
 
 WORKDIR /app
@@ -19,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python3 -m pip install --no-cache-dir openai-whisper gradio --extra-index-url https://download.pytorch.org/whl/cpu
 
-COPY transcription.py /app/
+RUN curl -JLO https://raw.githubusercontent.com/pnvnd/gradio-openai-whisper/refs/heads/main/transcription.py
 
 # Download base model cache
 RUN curl -JLO https://openaipublic.azureedge.net/main/whisper/models/ed3a0b6b1c0edf879ad9b11b1af5a0e6ab5db9205f891f668f8b0e6c6326e34e/base.pt
@@ -28,7 +27,8 @@ EXPOSE 7860
 
 ENTRYPOINT ["python3", "transcription.py"]
 
-# To run the container, use:
-# docker run --name openai-whisper -dp 7860:7860 transcription:latest
+# To run:
+# docker run --name openai-whisper -dp 7860:7860 ghcr.io/pnvnd/gradio-openai-whisper:latest
 
-# Once the container is running, go to http://localhost:7860
+# To use:
+# http://localhost:7860
